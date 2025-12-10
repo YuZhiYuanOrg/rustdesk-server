@@ -22,7 +22,7 @@ jobs:
   # Binary build
   build:
     name: Build - ${{ matrix.job.name }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -35,27 +35,28 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
     
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@v1
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          toolchain: "1.70.0"
-          targets: ${{ matrix.job.target }}
-          components: "rustfmt"
-          
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: ${{ matrix.job.os }}
+          toolchain: stable
+          override: true
+          default: true
+          components: rustfmt
+          profile: minimal
+          target: ${{ matrix.job.target }}
+
+      - name: Install cross
+        run: cargo install cross --locked
 
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --all-features --target=${{ matrix.job.target }}
-          use-cross: true  
+        run: |
+          export CROSS_CONTAINER_OPTS="--env RENDEZVOUS_SERVERS=${{ secrets.RENDEZVOUS_SERVERS }} \
+                                       --env RS_PUB_KEY=${{ secrets.RS_PUB_KEY }}"
+          cross build --release --all-features --target=${{ matrix.job.target }}
 
       - name: Exec chmod
         run: chmod -v a+x target/${{ matrix.job.target }}/release/*
@@ -86,12 +87,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
       - name: Download binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: binaries-linux-${{ matrix.job.name }}
           path: docker/rootfs/usr/bin
@@ -118,7 +119,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}-s6
+          images: ghcr.io/${{ vars.REPOSITORY }}-s6
 
       - name: Get git tag
         id: vars
@@ -138,9 +139,9 @@ jobs:
           build-args: |
             S6_ARCH=${{ matrix.job.s6_platform }}
           tags: |
-            ghcr.io/${{ github.repository }}-s6:${{ env.LATEST_TAG }}-${{ matrix.job.name }}
-            ghcr.io/${{ github.repository }}-s6:${{ env.GIT_TAG }}-${{ matrix.job.name }}
-            ghcr.io/${{ github.repository }}-s6:${{ env.MAJOR_TAG }}-${{ matrix.job.name }}
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.LATEST_TAG }}-${{ matrix.job.name }}
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.GIT_TAG }}-${{ matrix.job.name }}
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.MAJOR_TAG }}-${{ matrix.job.name }}
           labels: ${{ steps.meta.outputs.labels }}
 
   # Set up minifest and tag for pushed image
@@ -171,36 +172,36 @@ jobs:
         uses: Noelware/docker-manifest-action@master
         if: github.event_name != 'workflow_dispatch'
         with:
-          base-image: ghcr.io/${{ github.repository }}-s6:${{ env.GIT_TAG }}
-          extra-images: |
-            ghcr.io/${{ github.repository }}-s6:${{ env.GIT_TAG }}-amd64,
-            ghcr.io/${{ github.repository }}-s6:${{ env.GIT_TAG }}-arm64v8,
-            ghcr.io/${{ github.repository }}-s6:${{ env.GIT_TAG }}-armv7,
-            ghcr.io/${{ github.repository }}-s6:${{ env.GIT_TAG }}-i386
+          tags: ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.GIT_TAG }}
+          inputs: |
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.GIT_TAG }}-amd64,
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.GIT_TAG }}-arm64v8,
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.GIT_TAG }}-armv7,
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.GIT_TAG }}-i386
           push: true
 
       # Create and push manifest for :major tag
       - name: Create and push manifest (:major)
         uses: Noelware/docker-manifest-action@master
         with:
-          base-image: ghcr.io/${{ github.repository }}-s6:${{ env.MAJOR_TAG }}
-          extra-images: |
-            ghcr.io/${{ github.repository }}-s6:${{ env.MAJOR_TAG }}-amd64,
-            ghcr.io/${{ github.repository }}-s6:${{ env.MAJOR_TAG }}-arm64v8,
-            ghcr.io/${{ github.repository }}-s6:${{ env.MAJOR_TAG }}-armv7,
-            ghcr.io/${{ github.repository }}-s6:${{ env.MAJOR_TAG }}-i386
+          tags: ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.MAJOR_TAG }}
+          inputs: |
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.MAJOR_TAG }}-amd64,
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.MAJOR_TAG }}-arm64v8,
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.MAJOR_TAG }}-armv7,
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.MAJOR_TAG }}-i386
           push: true
 
       # Create and push manifest for :latest tag
       - name: Create and push manifest (:latest)
         uses: Noelware/docker-manifest-action@master
         with:
-          base-image: ghcr.io/${{ github.repository }}-s6:${{ env.LATEST_TAG }}
-          extra-images: |
-            ghcr.io/${{ github.repository }}-s6:${{ env.LATEST_TAG }}-amd64,
-            ghcr.io/${{ github.repository }}-s6:${{ env.LATEST_TAG }}-arm64v8,
-            ghcr.io/${{ github.repository }}-s6:${{ env.LATEST_TAG }}-armv7,
-            ghcr.io/${{ github.repository }}-s6:${{ env.LATEST_TAG }}-i386
+          tags: ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.LATEST_TAG }}
+          inputs: |
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.LATEST_TAG }}-amd64,
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.LATEST_TAG }}-arm64v8,
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.LATEST_TAG }}-armv7,
+            ghcr.io/${{ vars.REPOSITORY }}-s6:${{ env.LATEST_TAG }}-i386
           push: true
 
   # Build and push single-arch Docker images to ghcr.io
@@ -219,12 +220,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
       - name: Download binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: binaries-linux-${{ matrix.job.name }}
           path: docker-classic
@@ -235,7 +236,7 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -246,12 +247,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-        
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ vars.REPOSITORY }}
 
       - name: Get git tag
         id: vars
@@ -269,9 +270,9 @@ jobs:
           push: true
           provenance: false
           tags: |
-            ghcr.io/${{ github.repository }}:${{ env.LATEST_TAG }}-${{ matrix.job.name }}
-            ghcr.io/${{ github.repository }}:${{ env.GIT_TAG }}-${{ matrix.job.name }}
-            ghcr.io/${{ github.repository }}:${{ env.MAJOR_TAG }}-${{ matrix.job.name }}
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.LATEST_TAG }}-${{ matrix.job.name }}
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.GIT_TAG }}-${{ matrix.job.name }}
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.MAJOR_TAG }}-${{ matrix.job.name }}
           labels: ${{ steps.meta.outputs.labels }}
 
   # Set up minifest and tag for pushed image
@@ -302,34 +303,34 @@ jobs:
         uses: Noelware/docker-manifest-action@master
         if: github.event_name != 'workflow_dispatch'
         with:
-          base-image: ghcr.io/${{ github.repository }}:${{ env.GIT_TAG }}
-          extra-images: |
-            ghcr.io/${{ github.repository }}:${{ env.GIT_TAG }}-amd64,
-            ghcr.io/${{ github.repository }}:${{ env.GIT_TAG }}-arm64v8,
-            ghcr.io/${{ github.repository }}:${{ env.GIT_TAG }}-armv7,
-            ghcr.io/${{ github.repository }}:${{ env.GIT_TAG }}-i386
+          tags: ghcr.io/${{ vars.REPOSITORY }}:${{ env.GIT_TAG }}
+          inputs: |
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.GIT_TAG }}-amd64,
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.GIT_TAG }}-arm64v8,
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.GIT_TAG }}-armv7,
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.GIT_TAG }}-i386
           push: true
 
       # Create and push manifest for :major tag
       - name: Create and push manifest (:major)
         uses: Noelware/docker-manifest-action@master
         with:
-          base-image: ghcr.io/${{ github.repository }}:${{ env.MAJOR_TAG }}
-          extra-images: |
-            ghcr.io/${{ github.repository }}:${{ env.MAJOR_TAG }}-amd64,
-            ghcr.io/${{ github.repository }}:${{ env.MAJOR_TAG }}-arm64v8,
-            ghcr.io/${{ github.repository }}:${{ env.MAJOR_TAG }}-armv7,
-            ghcr.io/${{ github.repository }}:${{ env.MAJOR_TAG }}-i386
+          tags: ghcr.io/${{ vars.REPOSITORY }}:${{ env.MAJOR_TAG }}
+          inputs: |
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.MAJOR_TAG }}-amd64,
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.MAJOR_TAG }}-arm64v8,
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.MAJOR_TAG }}-armv7,
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.MAJOR_TAG }}-i386
           push: true
 
       # Create and push manifest for :latest tag
       - name: Create and push manifest (:latest)
         uses: Noelware/docker-manifest-action@master
         with:
-          base-image: ghcr.io/${{ github.repository }}:${{ env.LATEST_TAG }}
-          extra-images: |
-            ghcr.io/${{ github.repository }}:${{ env.LATEST_TAG }}-amd64,
-            ghcr.io/${{ github.repository }}:${{ env.LATEST_TAG }}-arm64v8,
-            ghcr.io/${{ github.repository }}:${{ env.LATEST_TAG }}-armv7,
-            ghcr.io/${{ github.repository }}:${{ env.LATEST_TAG }}-i386
+          tags: ghcr.io/${{ vars.REPOSITORY }}:${{ env.LATEST_TAG }}
+          inputs: |
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.LATEST_TAG }}-amd64,
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.LATEST_TAG }}-arm64v8,
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.LATEST_TAG }}-armv7,
+            ghcr.io/${{ vars.REPOSITORY }}:${{ env.LATEST_TAG }}-i386
           push: true
