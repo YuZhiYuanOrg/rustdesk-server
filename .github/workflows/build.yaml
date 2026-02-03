@@ -8,7 +8,7 @@ name: Build
 # DOCKER_PASSWORD is a token you should create under "account settings / security" with read/write access
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 on:
