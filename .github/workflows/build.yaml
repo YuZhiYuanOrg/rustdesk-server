@@ -23,8 +23,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   LATEST_TAG: latest
-  GHCR_IMAGE: ghcr.io/rustdesk/rustdesk-server-s6
-  GHCR_IMAGE_CLASSIC: ghcr.io/rustdesk/rustdesk-server
+  GHCR_IMAGE: ghcr.io/yuzhiyuanorg/rustdesk-server-s6
+  GHCR_IMAGE_CLASSIC: ghcr.io/yuzhiyuanorg/rustdesk-server
   
 jobs:
 
@@ -267,7 +267,7 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
-          username: rustdesk
+          username: yuzhiyuanorg
           password: ${{ secrets.GITHUB_TOKEN }}
         
       - name: Extract metadata (tags, labels) for Docker
@@ -331,7 +331,7 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
-          username: rustdesk
+          username: yuzhiyuanorg
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # manifest for :1.2.3 tag
@@ -435,7 +435,7 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
-          username: rustdesk
+          username: yuzhiyuanorg
           password: ${{ secrets.GITHUB_TOKEN }}
         
       - name: Extract metadata (tags, labels) for Docker
@@ -497,7 +497,7 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
-          username: rustdesk
+          username: yuzhiyuanorg
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # manifest for :1.2.3 tag
