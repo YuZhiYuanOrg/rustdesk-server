@@ -201,3 +201,53 @@ pub async fn load_lists() {
     }
     blacklist::log_list_count(&state::BLOCKLIST, "blocklist", BLOCKLIST_FILE).await;
 }
+
+/// Handle QUIC connection (when feature is enabled)
+#[cfg(feature = "quic")]
+pub async fn handle_quic_connection(
+    connection: quinn::Connection,
+    limiter: &Limiter,
+    key: &str,
+) {
+    let addr = connection.remote_address();
+    let ip = addr.ip();
+
+    // Check blocklist
+    let ip_str = ip.to_string();
+    if blacklist::is_in_list(&state::BLOCKLIST, &ip_str).await {
+        log::info!("QUIC connection from {} blocked", ip_str);
+        return;
+    }
+
+    let key = key.to_owned();
+    let limiter = limiter.clone();
+
+    tokio::spawn(async move {
+        // Accept a bidirectional stream
+        match connection.accept_bi().await {
+            Ok((send_stream, recv_stream)) => {
+                use super::stream::QuicStream;
+                let mut quic_stream = QuicStream::new(send_stream, recv_stream, addr);
+
+                if let Err(e) = make_pair_quic(&mut quic_stream, addr, &key, limiter).await {
+                    log::info!("QUIC relay error from {}: {}", addr, e);
+                }
+            }
+            Err(e) => {
+                log::warn!("Failed to accept QUIC stream: {}", e);
+            }
+        }
+    });
+}
+
+/// Create a relay pair from QUIC connection
+#[cfg(feature = "quic")]
+async fn make_pair_quic(
+    stream: &mut super::stream::QuicStream,
+    addr: std::net::SocketAddr,
+    key: &str,
+    limiter: Limiter,
+) -> ResultType<()> {
+    make_pair_inner(stream, addr, key, limiter).await;
+    Ok(())
+}

@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use hbb_common::log;
 
 /// Downgrade threshold * 100 (e.g., 66 means 0.66)
@@ -11,6 +11,20 @@ pub static LIMIT_SPEED: AtomicUsize = AtomicUsize::new(32 * 1024 * 1024);
 pub static TOTAL_BANDWIDTH: AtomicUsize = AtomicUsize::new(1024 * 1024 * 1024);
 /// Single connection bandwidth limit in bit/s
 pub static SINGLE_BANDWIDTH: AtomicUsize = AtomicUsize::new(128 * 1024 * 1024);
+
+// Network traversal configuration
+/// Enable QUIC protocol support
+pub static ENABLE_QUIC: AtomicBool = AtomicBool::new(false);
+/// Enable port hopping
+pub static ENABLE_PORT_HOPPING: AtomicBool = AtomicBool::new(false);
+/// Port hopping interval in seconds
+pub static PORT_HOPPING_INTERVAL: AtomicUsize = AtomicUsize::new(300);
+/// Port hopping range
+pub static PORT_HOPPING_RANGE: AtomicUsize = AtomicUsize::new(100);
+/// Enable STUN for NAT traversal
+pub static ENABLE_STUN: AtomicBool = AtomicBool::new(false);
+/// Enable TURN relay
+pub static ENABLE_TURN: AtomicBool = AtomicBool::new(false);
 
 /// Check and apply environment variable parameters
 pub fn check_params() {
@@ -53,6 +67,26 @@ pub fn check_params() {
         "SINGLE_BANDWIDTH",
         |v| format!("{}Mb/s", v / 1024.0 / 1024.0),
     );
+
+    // Network traversal parameters
+    check_param_bool("ENABLE_QUIC", &ENABLE_QUIC, "ENABLE_QUIC");
+    check_param_bool("ENABLE_PORT_HOPPING", &ENABLE_PORT_HOPPING, "ENABLE_PORT_HOPPING");
+    check_param_usize(
+        "PORT_HOPPING_INTERVAL",
+        &PORT_HOPPING_INTERVAL,
+        1,
+        "PORT_HOPPING_INTERVAL",
+        |v| format!("{}s", v),
+    );
+    check_param_usize(
+        "PORT_HOPPING_RANGE",
+        &PORT_HOPPING_RANGE,
+        1,
+        "PORT_HOPPING_RANGE",
+        |v| format!("{}", v),
+    );
+    check_param_bool("ENABLE_STUN", &ENABLE_STUN, "ENABLE_STUN");
+    check_param_bool("ENABLE_TURN", &ENABLE_TURN, "ENABLE_TURN");
 }
 
 fn check_param_f64<F: Fn(f64) -> String>(
@@ -85,4 +119,12 @@ fn check_param_usize<F: Fn(usize) -> String>(
         atomic.store(tmp * multiplier, Ordering::SeqCst);
     }
     log::info!("{}: {}", log_name, format_fn(atomic.load(Ordering::SeqCst)));
+}
+
+fn check_param_bool(env_name: &str, atomic: &AtomicBool, log_name: &str) {
+    let tmp = std::env::var(env_name)
+        .map(|x| x == "1" || x.to_lowercase() == "true")
+        .unwrap_or(false);
+    atomic.store(tmp, Ordering::SeqCst);
+    log::info!("{}: {}", log_name, atomic.load(Ordering::SeqCst));
 }

@@ -8,6 +8,9 @@ use hbb_common::{
 };
 use std::io::Error;
 
+#[cfg(feature = "quic")]
+use quinn::{RecvStream, SendStream};
+
 /// Trait for abstracting TCP and WebSocket streams
 #[async_trait]
 pub trait StreamTrait: Send + Sync + 'static {
@@ -65,4 +68,60 @@ impl StreamTrait for tokio_tungstenite::WebSocketStream<TcpStream> {
     }
 
     fn set_raw(&mut self) {}
+}
+
+/// QUIC stream wrapper for relay support
+#[cfg(feature = "quic")]
+pub struct QuicStream {
+    send: SendStream,
+    recv: RecvStream,
+    addr: std::net::SocketAddr,
+    raw: bool,
+}
+
+#[cfg(feature = "quic")]
+impl QuicStream {
+    pub fn new(send: SendStream, recv: RecvStream, addr: std::net::SocketAddr) -> Self {
+        Self {
+            send,
+            recv,
+            addr,
+            raw: false,
+        }
+    }
+
+    pub fn addr(&self) -> std::net::SocketAddr {
+        self.addr
+    }
+}
+
+#[cfg(feature = "quic")]
+#[async_trait]
+impl StreamTrait for QuicStream {
+    async fn recv(&mut self) -> Option<Result<BytesMut, Error>> {
+        use hbb_common::tokio::io::AsyncReadExt;
+
+        let mut buf = BytesMut::with_capacity(65536);
+        match self.recv.read_buf(&mut buf).await {
+            Ok(0) => None,
+            Ok(_) => Some(Ok(buf)),
+            Err(e) => Some(Err(e)),
+        }
+    }
+
+    async fn send_raw(&mut self, bytes: Bytes) -> ResultType<()> {
+        use hbb_common::tokio::io::AsyncWriteExt;
+
+        self.send.write_all(&bytes).await?;
+        self.send.flush().await?;
+        Ok(())
+    }
+
+    fn is_ws(&self) -> bool {
+        false
+    }
+
+    fn set_raw(&mut self) {
+        self.raw = true;
+    }
 }
