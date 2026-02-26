@@ -43,7 +43,7 @@ impl StreamTrait for tokio_tungstenite::WebSocketStream<TcpStream> {
             match msg {
                 Ok(msg) => match msg {
                     tungstenite::Message::Binary(bytes) => {
-                        Some(Ok(bytes[..].into())) // to-do: poor performance
+                        Some(Ok(Bytes::from(bytes).into()))
                     }
                     _ => Some(Ok(BytesMut::new())),
                 },
@@ -57,7 +57,7 @@ impl StreamTrait for tokio_tungstenite::WebSocketStream<TcpStream> {
     async fn send_raw(&mut self, bytes: Bytes) -> ResultType<()> {
         Ok(self
             .send(tungstenite::Message::Binary(bytes.to_vec()))
-            .await?) // to-do: poor performance
+            .await?)
     }
 
     fn is_ws(&self) -> bool {
